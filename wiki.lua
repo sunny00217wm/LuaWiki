@@ -4,7 +4,7 @@ local defs = {
   cr = lpeg.P('\r'),
   t = lpeg.P('\t'),
   merge_text = function(a, b) return a .. b end,
-  gen_header = function(v)
+  gen_heading = function(v)
     local htag = 'h' .. #v.htag
     return '<' .. htag .. '>' .. v[1]:gsub('^[ ]*', ''):gsub('[ ]*$', '') ..
       '</' .. htag .. '>'
@@ -17,12 +17,14 @@ local defs = {
 }
 
 local wiki_grammar = re.compile([==[
-  article        <- (block (newline block)*) ~> merge_text
-  block          <- header / paragraph
-  header         <- {| header_tag {[^=]+} =htag [ %t]* |} -> gen_header
-  header_tag     <- {:htag: '=' '='^-6 :}
-  paragraph      <- (newline / lines_of_text) -> '<p>%1</p>'
-  lines_of_text  <- (formatted newline -> ' ')+ ~> merge_text
+  article        <- ((special_block / block) block*) ~> merge_text
+  block          <- sol special_block / paragraph
+  special_block  <- horizontal_rule / heading
+  horizontal_rule <- '-'^+4 -> '<hr>' (formatted -> '<p>%1</p>')? newline
+  heading        <- {| heading_tag {[^=]+} =htag [ %t]* |} -> gen_heading
+  heading_tag    <- {:htag: '=' '='^-6 :}
+  paragraph      <- ((newline ->'' lines_of_text?) ~> merge_text / lines_of_text) -> '<p>%1</p>'
+  lines_of_text  <- (formatted (newline -> ' ' formatted)*) ~> merge_text newline
   formatted      <- (bold_text / italic_text / {"'"}? plain_text)+ ~> merge_text
   bold_text      <- ("'''" (italic_text / {"'"}? plain_text)+ ~> merge_text "'''") -> '<b>%1</b>'
   italic_text    <- ("''" (bold_text / {"'"}? plain_text)+ ~> merge_text "''") -> '<i>%1</i>'
@@ -30,6 +32,7 @@ local wiki_grammar = re.compile([==[
   inline_element <- link
   link           <- ('[[' {link_part} ('|' {link_part})? ']]') -> gen_link
   link_part      <- (!'|' !']' .)+
+  sol            <- [ \t]* newline
   newline        <- %cr? %nl
 ]==], defs)
 
