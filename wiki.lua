@@ -9,6 +9,13 @@ local defs = {
     return '<' .. htag .. '>' .. v[1]:gsub('^[ ]*', ''):gsub('[ ]*$', '') ..
       '</' .. htag .. '>'
   end,
+  gen_list = function(t)
+    local str = ''
+    for i, v in ipairs(t) do
+      str = str .. '<li>' .. v[2] .. '</li>'
+    end
+    return '<ul>' .. str .. '</ul>'
+  end,
   gen_link = function(a, b)
     local s = '<a href="/wiki/' .. a .. '">'
     if b then return s .. b .. '</a>'
@@ -19,10 +26,15 @@ local defs = {
 local wiki_grammar = re.compile([==[
   article        <- ((special_block / block) block*) ~> merge_text
   block          <- sol special_block / paragraph
-  special_block  <- horizontal_rule / heading
-  horizontal_rule <- '-'^+4 -> '<hr>' (formatted -> '<p>%1</p>')? newline
+  special_block  <- horizontal_rule / heading / list_block
+  horizontal_rule <- '-'^+4 -> '<hr>' (formatted -> '<p>%1</p>')? ~> merge_text
   heading        <- {| heading_tag {[^=]+} =htag [ %t]* |} -> gen_heading
   heading_tag    <- {:htag: '=' '='^-6 :}
+  list_block     <- {| list_item (newline list_item)* |} -> gen_list
+  list_item      <- {| {list_char+} list_body |}
+  list_char      <- [*#:;]
+  list_body      <- __ formatted 
+
   paragraph      <- ((newline ->'' lines_of_text?) ~> merge_text / lines_of_text) -> '<p>%1</p>'
   lines_of_text  <- (formatted (newline -> ' ' formatted)*) ~> merge_text newline
   formatted      <- (bold_text / italic_text / {"'"}? plain_text)+ ~> merge_text
@@ -32,7 +44,8 @@ local wiki_grammar = re.compile([==[
   inline_element <- link
   link           <- ('[[' {link_part} ('|' {link_part})? ']]') -> gen_link
   link_part      <- (!'|' !']' .)+
-  sol            <- [ \t]* newline
+  sol            <- __ newline
+  __             <- [ \t]*
   newline        <- %cr? %nl
 ]==], defs)
 
