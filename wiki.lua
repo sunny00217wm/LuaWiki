@@ -16,6 +16,13 @@ local defs = {
     end
     return '<ul>' .. str .. '</ul>'
   end,
+  gen_par_plus = function(t)
+    local p_content = table.concat(t)
+    if p_content == '' then p_content = '<br>' end
+    local str = '<p>' .. p_content .. '</p>'
+    if t.special then str = str .. t.special end
+    return str
+  end,
   gen_link = function(a, b)
     local s = '<a href="/wiki/' .. a .. '">'
     if b then return s .. b .. '</a>'
@@ -24,19 +31,23 @@ local defs = {
 }
 
 local wiki_grammar = re.compile([==[
-  article        <- ((special_block / block) block*) ~> merge_text
-  block          <- sol special_block / paragraph
-  special_block  <- horizontal_rule / heading / list_block
-  horizontal_rule <- '-'^+4 -> '<hr>' (formatted -> '<p>%1</p>')? ~> merge_text
+  article        <- ((special_block / paragraph_plus / block) block*) ~> merge_text
+  block          <- sol? (special_block / paragraph_plus)
+
+  paragraph_plus <- {| (newline / pline) latter_plines? |} -> gen_par_plus
+  latter_plines  <- {:special: special_block :} / pline latter_plines?
+  pline          <- (formatted newline -> ' ') ~> merge_text
+  special_block  <- &[-={*#:;] (horizontal_rule / heading / list_block / table) newline?
+  
+  horizontal_rule <- ('-'^+4 -> '<hr>' (formatted -> '<p>%1</p>')?) ~> merge_text
   heading        <- {| heading_tag {[^=]+} =htag [ %t]* |} -> gen_heading
   heading_tag    <- {:htag: '=' '='^-6 :}
   list_block     <- {| list_item (newline list_item)* |} -> gen_list
   list_item      <- {| {list_char+} list_body |}
   list_char      <- [*#:;]
-  list_body      <- __ formatted 
-
-  paragraph      <- ((newline ->'' lines_of_text?) ~> merge_text / lines_of_text) -> '<p>%1</p>'
-  lines_of_text  <- (formatted (newline -> ' ' formatted)*) ~> merge_text newline
+  list_body      <- __ formatted
+  table          <- { '{|' (!'|}' .)* '|}' }
+  
   formatted      <- (bold_text / italic_text / {"'"}? plain_text)+ ~> merge_text
   bold_text      <- ("'''" (italic_text / {"'"}? plain_text)+ ~> merge_text "'''") -> '<b>%1</b>'
   italic_text    <- ("''" (bold_text / {"'"}? plain_text)+ ~> merge_text "''") -> '<i>%1</i>'
