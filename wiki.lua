@@ -1,5 +1,37 @@
 local re = require('lpeg.re')
 
+local list_marks = {
+  ['*'] = {'ul','li'},
+  ['#'] = {'ol','li'},
+  [':'] = {'dl','dd'},
+  [';'] = {'dl','dt'}
+}
+
+local function node_visitor(node, tag)
+  local len = #node
+  if node[len] and node[len].tag == tag then
+    node = node[len]
+  else
+    local new_node = { tag = tag }
+    node[len + 1] = new_node
+    node = new_node
+  end
+  return node
+end
+
+local function otter_html(node)
+  local str = ''
+  for i, v in ipairs(node) do
+    if type(v) == 'table' then str = str .. otter_html(v)
+    else str = str .. v end
+  end
+  if node.tag then
+    str = '<' .. node.tag .. '>' .. str ..
+      '</' .. node.tag .. '>'
+  end
+  return str
+end
+
 local defs = {
   cr = lpeg.P('\r'),
   t = lpeg.P('\t'),
@@ -10,11 +42,22 @@ local defs = {
       '</' .. htag .. '>'
   end,
   gen_list = function(t)
-    local str = ''
+    local dom_tree = {}
     for i, v in ipairs(t) do
-      str = str .. '<li>' .. v[2] .. '</li>'
+      local pnode = dom_tree
+      local pstr = v[1]:sub(1,-2)
+      for c in string.gmatch(pstr, '.') do
+        local tags = list_marks[c]
+        pnode = node_visitor(pnode, tags[1])
+        pnode = node_visitor(pnode, tags[2])
+      end
+      -- last char
+      local ostr = v[1]:sub(-1)
+      local tags = list_marks[ostr]
+      pnode = node_visitor(pnode, tags[1])
+      pnode[#pnode + 1] = { tag = tags[2], v[2] }
     end
-    return '<ul>' .. str .. '</ul>'
+    return otter_html(dom_tree)
   end,
   gen_par_plus = function(t)
     local p_content = table.concat(t)
@@ -43,9 +86,7 @@ local wiki_grammar = re.compile([==[
   heading        <- {| heading_tag {[^=]+} =htag [ %t]* |} -> gen_heading
   heading_tag    <- {:htag: '=' '='^-6 :}
   list_block     <- {| list_item (newline list_item)* |} -> gen_list
-  list_item      <- {| {list_char+} list_body |}
-  list_char      <- [*#:;]
-  list_body      <- __ formatted
+  list_item      <- {| {[*#:;]+} __ (formatted / {''}) |}
   table          <- { '{|' (!'|}' .)* '|}' }
   
   formatted      <- (bold_text / italic_text / {"'"}? plain_text)+ ~> merge_text
