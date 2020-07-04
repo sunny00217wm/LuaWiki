@@ -73,6 +73,7 @@ local defs = {
   end
 }
 
+-- General Parsing
 local wiki_grammar = re.compile([==[
   article        <- ((special_block / paragraph_plus / block) block*) ~> merge_text
   block          <- sol? (special_block / paragraph_plus)
@@ -90,8 +91,10 @@ local wiki_grammar = re.compile([==[
   table          <- { '{|' (!'|}' .)* '|}' }
   
   formatted      <- (bold_text / italic_text / {"'"}? plain_text)+ ~> merge_text
-  bold_text      <- ("'''" (italic_text / {"'"}? plain_text)+ ~> merge_text "'''") -> '<b>%1</b>'
-  italic_text    <- ("''" (bold_text / {"'"}? plain_text)+ ~> merge_text "''") -> '<i>%1</i>'
+  bold_text      <- ("'''" bold_body ("'''"/ ![^%cr%nl]))
+  bold_body      <- ("''" italic_body "''" / {"'"}? plain_text)+ ~> merge_text -> '<b>%1</b>'
+  italic_text    <- ("''" italic_body ("''"/ ![^%cr%nl]))
+  italic_body    <- ("'''" bold_body "'''" / {"'"}? plain_text)+ ~> merge_text -> '<i>%1</i>'
   plain_text     <- (inline_element / {[^%cr%nl'] [^%cr%nl[{']*})+ ~> merge_text
   inline_element <- link
   link           <- ('[[' {link_part} ('|' {link_part})? ']]') -> gen_link
@@ -101,12 +104,12 @@ local wiki_grammar = re.compile([==[
   newline        <- %cr? %nl
 ]==], defs)
 
-local wiki_html = wiki_grammar:match[==[
-1=0，让世界回归平静
-
-==我推荐的维基工具==
-* [[WP:WIZ|创建条目向导]]
-* [[WP:上传|文件上传向导]]
+local wiki_html = wiki_grammar:match
+[==[
+* a<span>s'''d</span>f<u>12'''3</u>
+* a'''bc[[edf|er'''g]]456
+abc'''def''123
+asdqw'''eqwe
 ]==]
 
 ngx.say('<!DOCTYPE html><html><head><title>维基百科，自由的百科全书</title><head><body>' ..
