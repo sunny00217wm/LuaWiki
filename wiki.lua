@@ -22,6 +22,30 @@ end
 local function otter_html(node)
   local str = ''
   for i, v in ipairs(node) do
+local extlink_counter = 0
+
+local list_marks = {
+  ['*'] = {'ul','li'},
+  ['#'] = {'ol','li'},
+  [':'] = {'dl','dd'},
+  [';'] = {'dl','dt'}
+}
+
+local function node_visitor(node, tag)
+  local len = #node
+  if node[len] and node[len].tag == tag then
+    node = node[len]
+  else
+    local new_node = { tag = tag }
+    node[len + 1] = new_node
+    node = new_node
+  end
+  return node
+end
+
+local function otter_html(node)
+  local str = ''
+  for i, v in ipairs(node) do
     if type(v) == 'table' then str = str .. otter_html(v)
     else str = str .. v end
   end
@@ -35,6 +59,7 @@ end
 local defs = {
   cr = lpeg.P('\r'),
   t = lpeg.P('\t'),
+  eb = lpeg.P(']'),
   merge_text = function(a, b) return a .. b end,
   gen_heading = function(v)
     local htag = 'h' .. #v.htag
@@ -70,6 +95,14 @@ local defs = {
     local s = '<a href="/wiki/' .. a .. '">'
     if b then return s .. b .. '</a>'
     else return s .. a .. '</a>' end
+  end,
+  gen_extlink = function(a, b)
+    local s = '<a class="external" href="' .. a .. '">'
+    if b then return s .. b .. '</a>'
+    else
+      extlink_counter = extlink_counter + 1
+      return s .. extlink_counter .. '</a>'
+    end
   end
 }
 
@@ -96,11 +129,19 @@ local wiki_grammar = re.compile([==[
   italic_text    <- ("''" italic_body ("''"/ ![^%cr%nl]))
   italic_body    <- ("'''" bold_body "'''" / {"'"}? plain_text)+ ~> merge_text -> '<i>%1</i>'
   plain_text     <- (inline_element / {[^%cr%nl'] [^%cr%nl[{']*})+ ~> merge_text
-  inline_element <- link
-  link           <- ('[[' {link_part} ('|' {link_part})? ']]') -> gen_link
-  link_part      <- (!'|' !']' .)+
+  inline_element <- internal_link / external_link
+  
+  ld_formatted   <- (ld_bold_text / ld_italic_text / {"'"}? ld_plain_text)+ ~> merge_text
+  ld_bold_text   <- ("'''" ld_bold_body ("'''"/ &(']')))
+  ld_bold_body   <- ("''" ld_italic_body "''" / {"'"}? ld_plain_text)+ ~> merge_text -> '<b>%1</b>'
+  ld_italic_text <- ("''" ld_italic_body ("''"/ &(']')))
+  ld_italic_body <- ("'''" ld_bold_body "'''" / {"'"}? ld_plain_text)+ ~> merge_text -> '<i>%1</i>'
+  ld_plain_text  <- { [^%cr%nl|[%eb']+ }
+  internal_link  <- ('[[' {link_part} ('|' ld_formatted)? ']]') -> gen_link
+  external_link  <- ('[' { 'http' 's'? '://' [^ %t%eb]+ } ([ %t]+ ld_formatted)? ']') -> gen_extlink
+  link_part      <- [^|[%eb]+
   sol            <- __ newline
-  __             <- [ \t]*
+  __             <- [ %t]*
   newline        <- %cr? %nl
 ]==], defs)
 
