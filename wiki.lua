@@ -1,27 +1,5 @@
 local re = require('lpeg.re')
 
-local list_marks = {
-  ['*'] = {'ul','li'},
-  ['#'] = {'ol','li'},
-  [':'] = {'dl','dd'},
-  [';'] = {'dl','dt'}
-}
-
-local function node_visitor(node, tag)
-  local len = #node
-  if node[len] and node[len].tag == tag then
-    node = node[len]
-  else
-    local new_node = { tag = tag }
-    node[len + 1] = new_node
-    node = new_node
-  end
-  return node
-end
-
-local function otter_html(node)
-  local str = ''
-  for i, v in ipairs(node) do
 local extlink_counter = 0
 
 local list_marks = {
