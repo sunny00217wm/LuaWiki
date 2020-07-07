@@ -13,3 +13,4 @@ Become an alternative to MediaWiki, a lighter implementation.
 - [ ] incorporate MariaDB as a database, design basic tables for use
 - [ ] editing API and web editor
 - [ ] (maybe) sync with Wikipedia, and allow Wikimedia OAuth login, and save to Wikipedia
+
